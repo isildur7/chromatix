@@ -1,17 +1,12 @@
 import jax.numpy as jnp
 from flax import linen as nn
-from chex import Array, PRNGKey, assert_rank
+from chex import Array, PRNGKey
 from jax.scipy.ndimage import map_coordinates
 from typing import Callable, Optional, Tuple, Union
 from ..field import Field
-from ..functional.phase_masks import (
-    wrap_phase,
-    spectrally_modulate_phase,
-    phase_change,
-    seidel_aberrations,
-    zernike_aberrations,
-)
-from ..utils import _broadcast_2d_to_spatial
+from ..functional import wrap_phase, phase_change
+from ..utils import seidel_aberrations, zernike_aberrations
+from .utils import register
 
 __all__ = [
     "PhaseMask",
@@ -63,23 +58,16 @@ class PhaseMask(nn.Module):
             pupil_args = (self.n, self.f, self.NA)
         else:
             pupil_args = ()
-        phase = (
-            self.param(
-                "phase_pixels",
-                self.phase,
-                field.spatial_shape,
-                field.dx[..., 0, 0].squeeze(),
-                field.spectrum[..., 0, 0].squeeze(),
-                *pupil_args,
-            )
-            if callable(self.phase)
-            else self.phase
+
+        phase = register(
+            self,
+            "phase",
+            field.spatial_shape,
+            field.dx[..., 0, 0].squeeze(),
+            field.spectrum[..., 0, 0].squeeze(),
+            *pupil_args,
         )
-        assert_rank(phase, 2, custom_message="Phase must be array of shape (H W)")
-        phase = _broadcast_2d_to_spatial(phase, field.ndim)
-        phase = spectrally_modulate_phase(
-            phase, field.spectrum, field.spectrum[..., 0, 0].squeeze()
-        )
+
         return phase_change(field, phase)
 
 
@@ -142,19 +130,15 @@ class SpatialLightModulator(nn.Module):
             pupil_args = (self.n, self.f, self.NA)
         else:
             pupil_args = ()
-        phase = (
-            self.param(
-                "slm_pixels",
-                self.phase,
-                self.shape,
-                self.spacing,
-                field.spectrum[..., 0, 0].squeeze(),
-                *pupil_args,
-            )
-            if callable(self.phase)
-            else self.phase
+
+        phase = register(
+            self,
+            "phase",
+            self.shape,
+            self.spacing,
+            field.spectrum[..., 0, 0].squeeze(),
+            *pupil_args,
         )
-        assert_rank(phase, 2, custom_message="Phase must be array of shape (H W)")
         assert (
             phase.shape == self.shape
         ), "Provided phase shape should match provided SLM shape"
@@ -165,10 +149,7 @@ class SpatialLightModulator(nn.Module):
             indexing="ij",
         )
         phase = map_coordinates(phase, field_pixel_grid, self.interpolation_order)
-        phase = _broadcast_2d_to_spatial(phase, field.ndim)
-        phase = spectrally_modulate_phase(
-            phase, field.spectrum, field.spectrum[..., 0, 0].squeeze()
-        )
+
         return phase_change(field, phase)
 
 
@@ -206,11 +187,7 @@ class SeidelAberrations(nn.Module):
     @nn.compact
     def __call__(self, field: Field) -> Field:
         """Applies ``phase`` mask to incoming ``Field``."""
-        coefficients = (
-            self.param("seidel_coefficients", self.coefficients)
-            if callable(self.coefficients)
-            else self.coefficients
-        )
+        coefficients = register(self, "coefficients")
         phase = seidel_aberrations(
             field.spatial_shape,
             field.dx[..., 0, 0].squeeze(),
@@ -222,10 +199,7 @@ class SeidelAberrations(nn.Module):
             self.u,
             self.v,
         )
-        phase = _broadcast_2d_to_spatial(phase, field.ndim)
-        phase = spectrally_modulate_phase(
-            phase, field.spectrum, field.spectrum[..., 0, 0].squeeze()
-        )
+
         return phase_change(field, phase)
 
 
@@ -260,11 +234,7 @@ class ZernikeAberrations(nn.Module):
     @nn.compact
     def __call__(self, field: Field) -> Field:
         """Applies ``phase`` mask to incoming ``Field``."""
-        coefficients = (
-            self.param("zernike_coefficients", self.coefficients)
-            if callable(self.coefficients)
-            else self.coefficients
-        )
+        coefficients = register(self, "coefficients")
 
         phase = zernike_aberrations(
             field.spatial_shape,
@@ -276,8 +246,5 @@ class ZernikeAberrations(nn.Module):
             self.ansi_indices,
             coefficients,
         )
-        phase = _broadcast_2d_to_spatial(phase, field.ndim)
-        phase = spectrally_modulate_phase(
-            phase, field.spectrum, field.spectrum[..., 0, 0].squeeze()
-        )
+
         return phase_change(field, phase)

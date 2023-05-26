@@ -1,7 +1,6 @@
 from chromatix.systems import Microscope, Optical4FSystemPSF
 from chromatix.elements import BasicShotNoiseSensor
-from chromatix.utils import trainable
-from chromatix.functional.phase_masks import flat_phase
+from chromatix.utils import trainable, flat_phase
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -21,15 +20,10 @@ NA = 0.8  # numerical aperture of objective
 
 microscope = Microscope(
     system_psf=Optical4FSystemPSF(
-        shape=shape,
-        spacing=spacing,
-        phase=trainable(flat_phase)
+        shape=shape, spacing=spacing, phase=trainable(flat_phase, rng=False)
     ),
     sensor=BasicShotNoiseSensor(
-        shape=shape,
-        spacing=spacing,
-        resampling_method=None,
-        reduce_axis=0
+        shape=shape, spacing=spacing, resampling_method=None, reduce_axis=0
     ),
     f=f,
     n=n,
@@ -67,16 +61,14 @@ print(f"single gpu: {np.mean(single_gpu_times)} +/- {np.std(single_gpu_times)} m
 
 microscope = Microscope(
     system_psf=Optical4FSystemPSF(
-        shape=shape,
-        spacing=spacing,
-        phase=trainable(flat_phase)
+        shape=shape, spacing=spacing, phase=trainable(flat_phase, rng=False)
     ),
     sensor=BasicShotNoiseSensor(
         shape=shape,
         spacing=spacing,
         resampling_method=None,
         reduce_axis=0,
-        reduce_parallel_axis_name="devices"
+        reduce_parallel_axis_name="devices",
     ),
     f=f,
     n=n,
