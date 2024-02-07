@@ -23,3 +23,6 @@
 
 ## Polarization
 ::: chromatix.functional.polarizers
+
+## Convenience
+:::chromatix.functional.convenience
